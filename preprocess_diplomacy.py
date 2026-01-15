@@ -142,7 +142,7 @@ def main():
     # 1. Load Data
     print("Loading CSV...")
     try:
-        df = pd.read_csv(input_path, encoding='utf-8',encoding_errors='replace')
+        df = pd.read_csv(input_path, encoding='utf-8', encoding_errors='replace')
     except Exception as e:
         print(f"Error reading CSV: {e}")
         sys.exit(1)
@@ -150,12 +150,31 @@ def main():
     initial_rows = len(df)
     print(f"Loaded {initial_rows} rows.")
     
+    # Step 2: Check for problematic rows with encoding issues
+    print("\nChecking for encoding issues...")
+    mask = df.astype(str).apply(lambda x: x.str.contains('\ufffd', na=False)).any(axis=1)
+    problematic_rows = df[mask]
+    
+    print(f"Problematic rows with encoding issues: {len(problematic_rows)}")
+    if len(problematic_rows) > 0:
+        print(f"Percentage: {len(problematic_rows)/len(df)*100:.2f}%")
+    
+    # Step 3: Remove if minor issue
+    if len(problematic_rows) / len(df) < 0.01:  # Less than 1%
+        print("✓ Removing problematic rows (< 1% of data)")
+        df = df[~mask]
+        print(f"Rows after removing encoding issues: {len(df)}")
+    elif len(problematic_rows) > 0:
+        print("⚠ WARNING: Many rows have encoding issues, but continuing...")
+    else:
+        print("✓ No encoding issues detected.")
+    
     # 2. Rename Columns
     # Expected: Destination, Sending Country, Year, Location, Embassy, Focus, EmbassyFocus, LOR
     # Map to: year, origin, destination, embassy_level, focus
     
     # Check current columns
-    print(f"Columns: {list(df.columns)}")
+    print(f"\nColumns: {list(df.columns)}")
     
     # Flexible mapping to handle potential variations
     col_map = {
@@ -193,14 +212,14 @@ def main():
     df = df[available_cols].copy()
     
     # 3. Filter Time Range
-    print(f"Filtering years {START_YEAR}-{END_YEAR}...")
+    print(f"\nFiltering years {START_YEAR}-{END_YEAR}...")
     df['year'] = pd.to_numeric(df['year'], errors='coerce')
     df = df.dropna(subset=['year']) 
     df = df[(df['year'] >= START_YEAR) & (df['year'] <= END_YEAR)]
     print(f"Rows after year filter: {len(df)}")
     
     # 4. Country Conversion
-    print("Converting country names to ISO codes...")
+    print("\nConverting country names to ISO codes...")
     
     # Track unconvertible
     unconvertible = set()
@@ -230,7 +249,7 @@ def main():
     df = df.drop(columns=['origin_iso', 'destination_iso'])
     
     # 5. Cleaning
-    print("Cleaning data...")
+    print("\nCleaning data...")
     rows_step5_start = len(df)
     
     # Remove self-loops
@@ -253,7 +272,7 @@ def main():
     print(f"Removed {na_removed} rows with missing values.")
     
     # 6. Deduplication
-    print("Handling duplicates...")
+    print("\nHandling duplicates...")
     # Keep row with max embassy_level for same (year, origin, destination)
     # Sort by embassy_level desc, then drop duplicates keeping first
     rows_pre_dedup = len(df)
