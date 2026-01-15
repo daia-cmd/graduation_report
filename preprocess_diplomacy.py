@@ -2,313 +2,383 @@ import pandas as pd
 import numpy as np
 import os
 import sys
+from collections import defaultdict
 
 # --- CONFIGURATION ---
 INPUT_FILE = r'data/raw/diplometrics_ddr.csv'
 OUTPUT_FILE = 'diplomatic_network.csv'
+QUALITY_REPORT_FILE = 'diplomatic_data_quality_report.txt'
 START_YEAR = 2000
 END_YEAR = 2020
 
 # --- COUNTRY MAPPING DICTIONARY ---
-# Comprehensive mapping including historical and special cases
+# (完全版 - 省略せず全部含める)
 COUNTRY_MAPPING = {
-    # Special cases requested
-    "United States": "USA",
-    "United Kingdom": "GBR",
-    "Russia": "RUS",
-    "South Korea": "KOR",
-    "North Korea": "PRK",
-    "Vietnam": "VNM",
-    "Laos": "LAO",
-    "Syria": "SYR",
-    "Iran": "IRN",
-    "Tanzania": "TZA",
-    "Bolivia": "BOL",
-    "Venezuela": "VEN",
-    "Moldova": "MDA",
-    "Congo, Dem. Rep.": "COD",
-    "Congo, Rep.": "COG",
-    "Gambia, The": "GMB",
-    "Bahamas, The": "BHS",
+    "United States": "USA", "United Kingdom": "GBR", "Russia": "RUS",
+    "South Korea": "KOR", "North Korea": "PRK", "Vietnam": "VNM",
+    "Laos": "LAO", "Syria": "SYR", "Iran": "IRN", "Tanzania": "TZA",
+    "Bolivia": "BOL", "Venezuela": "VEN", "Moldova": "MDA",
+    "Congo, Dem. Rep.": "COD", "Congo, Rep.": "COG",
+    "Gambia, The": "GMB", "Bahamas, The": "BHS",
+    "USSR": "RUS", "Soviet Union": "RUS", "Yugoslavia": "SRB",
+    "Czechoslovakia": "CZE", "East Germany": "DEU", "West Germany": "DEU",
     
-    # Historical
-    "USSR": "RUS", # Mapping USSR to Russia for continuity if desired, or use 'SUN'
-    "Soviet Union": "RUS",
-    "Yugoslavia": "SRB", # Often mapped to Serbia, or 'YUG'
-    "Czechoslovakia": "CZE", # or 'CSK', mapping to Czechia usually
-    "East Germany": "DEU", # Mapped to Germany
-    "West Germany": "DEU",
-    
-    # Standard Names (Partial List - enhanced with common variations)
-    "Afghanistan": "AFG", "Albania": "ALB", "Algeria": "DZA", "Andorra": "AND", "Angola": "AGO",
-    "Antigua and Barbuda": "ATG", "Argentina": "ARG", "Armenia": "ARM", "Australia": "AUS", "Austria": "AUT",
-    "Azerbaijan": "AZE", "Bahamas": "BHS", "Bahrain": "BHR", "Bangladesh": "BGD", "Barbados": "BRB",
-    "Belarus": "BLR", "Belgium": "BEL", "Belize": "BLZ", "Benin": "BEN", "Bhutan": "BTN",
-    "Bolivia": "BOL", "Bosnia and Herzegovina": "BIH", "Botswana": "BWA", "Brazil": "BRA", "Brunei": "BRN",
-    "Bulgaria": "BGR", "Burkina Faso": "BFA", "Burundi": "BDI", "Cabo Verde": "CPV", "Cambodia": "KHM",
-    "Cameroon": "CMR", "Canada": "CAN", "Central African Republic": "CAF", "Chad": "TCD", "Chile": "CHL",
-    "China": "CHN", "Colombia": "COL", "Comoros": "COM", "Congo": "COG", "Costa Rica": "CRI",
-    "Croatia": "HRV", "Cuba": "CUB", "Cyprus": "CYP", "Czech Republic": "CZE", "Denmark": "DNK",
-    "Djibouti": "DJI", "Dominica": "DMA", "Dominican Republic": "DOM", "Ecuador": "ECU", "Egypt": "EGY",
-    "El Salvador": "SLV", "Equatorial Guinea": "GNQ", "Eritrea": "ERI", "Estonia": "EST", "Eswatini": "SWZ",
-    "Ethiopia": "ETH", "Fiji": "FJI", "Finland": "FIN", "France": "FRA", "Gabon": "GAB",
-    "Gambia": "GMB", "Georgia": "GEO", "Germany": "DEU", "Ghana": "GHA", "Greece": "GRC",
-    "Grenada": "GRD", "Guatemala": "GTM", "Guinea": "GIN", "Guinea-Bissau": "GNB", "Guyana": "GUY",
-    "Haiti": "HTI", "Honduras": "HND", "Hungary": "HUN", "Iceland": "ISL", "India": "IND",
-    "Indonesia": "IDN", "Iran": "IRN", "Iraq": "IRQ", "Ireland": "IRL", "Israel": "ISR",
-    "Italy": "ITA", "Jamaica": "JAM", "Japan": "JPN", "Jordan": "JOR", "Kazakhstan": "KAZ",
-    "Kenya": "KEN", "Kiribati": "KIR", "Korea, North": "PRK", "Korea, South": "KOR", "Kuwait": "KWT",
-    "Kyrgyzstan": "KGZ", "Laos": "LAO", "Latvia": "LVA", "Lebanon": "LBN", "Lesotho": "LSO",
-    "Liberia": "LBR", "Libya": "LBY", "Liechtenstein": "LIE", "Lithuania": "LTU", "Luxembourg": "LUX",
-    "Madagascar": "MDG", "Malawi": "MWI", "Malaysia": "MYS", "Maldives": "MDV", "Mali": "MLI",
-    "Malta": "MLT", "Marshall Islands": "MHL", "Mauritania": "MRT", "Mauritius": "MUS", "Mexico": "MEX",
-    "Micronesia": "FSM", "Moldova": "MDA", "Monaco": "MCO", "Mongolia": "MNG", "Montenegro": "MNE",
-    "Morocco": "MAR", "Mozambique": "MOZ", "Myanmar": "MMR", "Namibia": "NAM", "Nauru": "NRU",
-    "Nepal": "NPL", "Netherlands": "NLD", "New Zealand": "NZL", "Nicaragua": "NIC", "Niger": "NER",
-    "Nigeria": "NGA", "North Macedonia": "MKD", "Norway": "NOR", "Oman": "OMN", "Pakistan": "PAK",
-    "Palau": "PLW", "Panama": "PAN", "Papua New Guinea": "PNG", "Paraguay": "PRY", "Peru": "PER",
-    "Philippines": "PHL", "Poland": "POL", "Portugal": "PRT", "Qatar": "QAT", "Romania": "ROU",
-    "Russian Federation": "RUS", "Rwanda": "RWA", "Saint Kitts and Nevis": "KNA", "Saint Lucia": "LCA",
-    "Saint Vincent and the Grenadines": "VCT", "Samoa": "WSM", "San Marino": "SMR", "Sao Tome and Principe": "STP",
-    "Saudi Arabia": "SAU", "Senegal": "SEN", "Serbia": "SRB", "Seychelles": "SYC", "Sierra Leone": "SLE",
-    "Singapore": "SGP", "Slovakia": "SVK", "Slovenia": "SVN", "Solomon Islands": "SLB", "Somalia": "SOM",
-    "South Africa": "ZAF", "South Sudan": "SSD", "Spain": "ESP", "Sri Lanka": "LKA", "Sudan": "SDN",
-    "Suriname": "SUR", "Sweden": "SWE", "Switzerland": "CHE", "Syria": "SYR", "Taiwan": "TWN",
-    "Tajikistan": "TJK", "Tanzania": "TZA", "Thailand": "THA", "Timor-Leste": "TLS", "Togo": "TGO",
-    "Tonga": "TON", "Trinidad and Tobago": "TTO", "Tunisia": "TUN", "Turkey": "TUR", "Turkmenistan": "TKM",
-    "Tuvalu": "TUV", "Uganda": "UGA", "Ukraine": "UKR", "United Arab Emirates": "ARE", "Uruguay": "URY",
-    "Uzbekistan": "UZB", "Vanuatu": "VUT", "Vatican City": "VAT", "Venezuela": "VEN", "Vietnam": "VNM",
-    "Yemen": "YEM", "Zambia": "ZMB", "Zimbabwe": "ZWE",
-    "Holy See": "VAT", "Swaziland": "SWZ", "Macedonia": "MKD", "Burma": "MMR", "Ivory Coast": "CIV",
+    # 追加: Diplometrics特有の表記
+    "Kosovo": "XKX", "Serbia and Montenegro": "SRB",
+    "Northern Cyprus, Turkish Republic of": "CYP",
+    "United KIngdom": "GBR",  # タイポ対応
+    "C?te d�fIvoire": "CIV",  # エンコーディング破損
+    "Micronesia, Federated States of": "FSM",
+    "Korea, Republic of": "KOR",
+    "Korea, Democratic People's Republic of": "PRK",
+    "Viet Nam": "VNM",
+    "Lao People's Democratic Republic": "LAO",
+    "Iran, Islamic Republic of": "IRN",
+    "Tanzania, United Republic of": "TZA",
+    "Congo, Democratic Republic of the": "COD",
+    "Congo, Republic of the": "COG",
+    "Congo-Brazzaville": "COG",
+    "Congo-Kinshasa": "COD",
+    "Bolivia, Plurinational State of": "BOL",
+    "Venezuela, Bolivarian Republic of": "VEN",
+    "Moldova, Republic of": "MDA",
+    "Niue": "NIU",
+    "Montserrat": "MSR",
+    "Cook Islands": "COK",
+    "Holy See (Vatican)": "VAT",
+    "Holy See": "VAT",
+    "Afghanistan": "AFG", "Albania": "ALB", "Algeria": "DZA", "Andorra": "AND",
+    "Angola": "AGO", "Antigua and Barbuda": "ATG", "Argentina": "ARG",
+    "Armenia": "ARM", "Australia": "AUS", "Austria": "AUT", "Azerbaijan": "AZE",
+    "Bahamas": "BHS", "Bahrain": "BHR", "Bangladesh": "BGD", "Barbados": "BRB",
+    "Belarus": "BLR", "Belgium": "BEL", "Belize": "BLZ", "Benin": "BEN",
+    "Bhutan": "BTN", "Bolivia": "BOL", "Bosnia and Herzegovina": "BIH",
+    "Botswana": "BWA", "Brazil": "BRA", "Brunei": "BRN", "Bulgaria": "BGR",
+    "Burkina Faso": "BFA", "Burundi": "BDI", "Cabo Verde": "CPV",
+    "Cambodia": "KHM", "Cameroon": "CMR", "Canada": "CAN",
+    "Central African Republic": "CAF", "Chad": "TCD", "Chile": "CHL",
+    "China": "CHN", "Colombia": "COL", "Comoros": "COM", "Congo": "COG",
+    "Costa Rica": "CRI", "Croatia": "HRV", "Cuba": "CUB", "Cyprus": "CYP",
+    "Czech Republic": "CZE", "Denmark": "DNK", "Djibouti": "DJI",
+    "Dominica": "DMA", "Dominican Republic": "DOM", "Ecuador": "ECU",
+    "Egypt": "EGY", "El Salvador": "SLV", "Equatorial Guinea": "GNQ",
+    "Eritrea": "ERI", "Estonia": "EST", "Eswatini": "SWZ", "Ethiopia": "ETH",
+    "Fiji": "FJI", "Finland": "FIN", "France": "FRA", "Gabon": "GAB",
+    "Gambia": "GMB", "Georgia": "GEO", "Germany": "DEU", "Ghana": "GHA",
+    "Greece": "GRC", "Grenada": "GRD", "Guatemala": "GTM", "Guinea": "GIN",
+    "Guinea-Bissau": "GNB", "Guyana": "GUY", "Haiti": "HTI", "Honduras": "HND",
+    "Hungary": "HUN", "Iceland": "ISL", "India": "IND", "Indonesia": "IDN",
+    "Iraq": "IRQ", "Ireland": "IRL", "Israel": "ISR", "Italy": "ITA",
+    "Jamaica": "JAM", "Japan": "JPN", "Jordan": "JOR", "Kazakhstan": "KAZ",
+    "Kenya": "KEN", "Kiribati": "KIR", "Korea, North": "PRK",
+    "Korea, South": "KOR", "Kuwait": "KWT", "Kyrgyzstan": "KGZ",
+    "Latvia": "LVA", "Lebanon": "LBN", "Lesotho": "LSO", "Liberia": "LBR",
+    "Libya": "LBY", "Liechtenstein": "LIE", "Lithuania": "LTU",
+    "Luxembourg": "LUX", "Madagascar": "MDG", "Malawi": "MWI",
+    "Malaysia": "MYS", "Maldives": "MDV", "Mali": "MLI", "Malta": "MLT",
+    "Marshall Islands": "MHL", "Mauritania": "MRT", "Mauritius": "MUS",
+    "Mexico": "MEX", "Micronesia": "FSM", "Monaco": "MCO", "Mongolia": "MNG",
+    "Montenegro": "MNE", "Morocco": "MAR", "Mozambique": "MOZ",
+    "Myanmar": "MMR", "Namibia": "NAM", "Nauru": "NRU", "Nepal": "NPL",
+    "Netherlands": "NLD", "New Zealand": "NZL", "Nicaragua": "NIC",
+    "Niger": "NER", "Nigeria": "NGA", "North Macedonia": "MKD",
+    "Norway": "NOR", "Oman": "OMN", "Pakistan": "PAK", "Palau": "PLW",
+    "Panama": "PAN", "Papua New Guinea": "PNG", "Paraguay": "PRY",
+    "Peru": "PER", "Philippines": "PHL", "Poland": "POL", "Portugal": "PRT",
+    "Qatar": "QAT", "Romania": "ROU", "Russian Federation": "RUS",
+    "Rwanda": "RWA", "Saint Kitts and Nevis": "KNA", "Saint Lucia": "LCA",
+    "Saint Vincent and the Grenadines": "VCT", "Samoa": "WSM",
+    "San Marino": "SMR", "Sao Tome and Principe": "STP", "Saudi Arabia": "SAU",
+    "Senegal": "SEN", "Serbia": "SRB", "Seychelles": "SYC",
+    "Sierra Leone": "SLE", "Singapore": "SGP", "Slovakia": "SVK",
+    "Slovenia": "SVN", "Solomon Islands": "SLB", "Somalia": "SOM",
+    "South Africa": "ZAF", "South Sudan": "SSD", "Spain": "ESP",
+    "Sri Lanka": "LKA", "Sudan": "SDN", "Suriname": "SUR", "Sweden": "SWE",
+    "Switzerland": "CHE", "Taiwan": "TWN", "Tajikistan": "TJK",
+    "Thailand": "THA", "Timor-Leste": "TLS", "Togo": "TGO", "Tonga": "TON",
+    "Trinidad and Tobago": "TTO", "Tunisia": "TUN", "Turkey": "TUR",
+    "Turkmenistan": "TKM", "Tuvalu": "TUV", "Uganda": "UGA", "Ukraine": "UKR",
+    "United Arab Emirates": "ARE", "Uruguay": "URY", "Uzbekistan": "UZB",
+    "Vanuatu": "VUT", "Vatican City": "VAT", "Yemen": "YEM", "Zambia": "ZMB",
+    "Zimbabwe": "ZWE", "Holy See": "VAT", "Swaziland": "SWZ",
+    "Macedonia": "MKD", "Burma": "MMR", "Ivory Coast": "CIV",
     "Cote d'Ivoire": "CIV", "Cape Verde": "CPV"
 }
 
-# Try to use pycountry for missing entries
+# データ品質トラッキング
+class DataQualityTracker:
+    def __init__(self):
+        self.initial_rows = 0
+        self.removed = defaultdict(lambda: {'count': 0, 'details': []})
+        self.warnings = []
+        
+    def set_initial(self, count):
+        self.initial_rows = count
+    
+    def record_removal(self, reason, count, details=None):
+        self.removed[reason]['count'] = count
+        if details:
+            self.removed[reason]['details'] = details
+    
+    def add_warning(self, message):
+        self.warnings.append(message)
+    
+    def generate_report(self, final_count):
+        report = []
+        report.append("="*70)
+        report.append(" DATA QUALITY REPORT - DIPLOMATIC NETWORK ")
+        report.append("="*70)
+        report.append(f"\n初期行数: {self.initial_rows:,}")
+        report.append(f"最終行数: {final_count:,}")
+        report.append(f"保持率: {final_count/self.initial_rows*100:.2f}%")
+        report.append(f"除外率: {(self.initial_rows-final_count)/self.initial_rows*100:.2f}%")
+        
+        report.append("\n" + "-"*70)
+        report.append(" 除外理由の内訳 ")
+        report.append("-"*70)
+        
+        total_removed = self.initial_rows - final_count
+        for reason, data in sorted(self.removed.items(), 
+                                   key=lambda x: x[1]['count'], 
+                                   reverse=True):
+            count = data['count']
+            pct = count / self.initial_rows * 100
+            report.append(f"\n【{reason}】")
+            report.append(f"  除外行数: {count:,} ({pct:.2f}%)")
+            report.append(f"  正当性: {'✓' if self._is_justified(reason) else '⚠'}")
+            
+            if data['details']:
+                report.append(f"  詳細:")
+                for detail in data['details'][:10]:  # 最初の10件
+                    report.append(f"    - {detail}")
+                if len(data['details']) > 10:
+                    report.append(f"    ... and {len(data['details'])-10} more")
+        
+        if self.warnings:
+            report.append("\n" + "-"*70)
+            report.append(" 警告 ")
+            report.append("-"*70)
+            for warning in self.warnings:
+                report.append(f"  ⚠ {warning}")
+        
+        report.append("\n" + "="*70)
+        report.append(" 正当性評価 ")
+        report.append("="*70)
+        report.append(self._evaluate_justification())
+        
+        return "\n".join(report)
+    
+    def _is_justified(self, reason):
+        """除外理由が正当かチェック"""
+        justified_reasons = [
+            "時間範囲外（2000-2020年外）",
+            "自己ループ（origin == destination）",
+            "弱い外交関係（embassy_level < 4）",
+            "重複エントリ",
+            "エンコーディング問題（< 1%）"
+        ]
+        return any(j in reason for j in justified_reasons)
+    
+    def _evaluate_justification(self):
+        """全体的な正当性を評価"""
+        lines = []
+        
+        # チェック1: 除外率が妥当か
+        exclusion_rate = (self.initial_rows - final_count) / self.initial_rows * 100
+        if exclusion_rate < 20:
+            lines.append("✓ 除外率が低い（< 20%）- 良好")
+        elif exclusion_rate < 50:
+            lines.append("⚠ 除外率がやや高い（20-50%）- 要確認")
+        else:
+            lines.append("✗ 除外率が高い（> 50%）- データソース確認推奨")
+        
+        # チェック2: ISO変換失敗率
+        iso_failed = self.removed.get('ISO変換失敗', {}).get('count', 0)
+        if iso_failed > 0:
+            failure_rate = iso_failed / self.initial_rows * 100
+            if failure_rate < 5:
+                lines.append("✓ ISO変換失敗率が低い（< 5%）")
+            else:
+                lines.append(f"⚠ ISO変換失敗率が高い（{failure_rate:.1f}%）")
+        
+        # チェック3: 不正な除外理由がないか
+        unjustified = [r for r in self.removed.keys() if not self._is_justified(r)]
+        if unjustified:
+            lines.append(f"⚠ 正当化できない除外: {unjustified}")
+        else:
+            lines.append("✓ すべての除外理由が正当化されている")
+        
+        return "\n".join(lines)
+
+# Pycountry
 try:
     import pycountry
     HAS_PYCOUNTRY = True
-    print("Pycountry library detected. It will be used for fallback lookups.")
 except ImportError:
     HAS_PYCOUNTRY = False
-    print("Pycountry not found. Using internal dictionary only.")
 
 def get_iso_code(country_name):
-    """
-    Convert country name to ISO 3-letter code.
-    Prioritizes dictionary mapping, then fuzzy/pycountry lookup if available.
-    """
     if not isinstance(country_name, str):
         return None
-        
     clean_name = country_name.strip()
-    
-    # 1. Direct dictionary lookup
     if clean_name in COUNTRY_MAPPING:
         return COUNTRY_MAPPING[clean_name]
-        
-    # 2. Pycountry fallback
     if HAS_PYCOUNTRY:
         try:
-            # Try exact match first
             country = pycountry.countries.get(name=clean_name)
             if country:
                 return country.alpha_3
-            
-            # Try fuzzy search
             matches = pycountry.countries.search_fuzzy(clean_name)
             if matches:
                 return matches[0].alpha_3
         except (LookupError, AttributeError):
             pass
-            
     return None
 
 def main():
-    print(f"Starting processing...")
-    print(f"Looking for data in: {INPUT_FILE}")
+    global final_count
     
+    tracker = DataQualityTracker()
+    
+    print("="*70)
+    print(" DIPLOMATIC DATA PREPROCESSING WITH QUALITY TRACKING ")
+    print("="*70)
+    
+    # 1. ロード
     if not os.path.exists(INPUT_FILE):
-        print(f"ERROR: Input file not found at {INPUT_FILE}")
-        # Try finding it in current dir just in case
         alt_path = 'diplometrics_ddr.csv'
-        if os.path.exists(alt_path):
-            print(f"Found at {alt_path}, using that instead.")
-            input_path = alt_path
-        else:
+        input_path = alt_path if os.path.exists(alt_path) else None
+        if not input_path:
+            print(f"ERROR: Input file not found")
             sys.exit(1)
     else:
         input_path = INPUT_FILE
-        
-    # 1. Load Data
-    print("Loading CSV...")
-    try:
-        df = pd.read_csv(input_path, encoding='utf-8', encoding_errors='replace')
-    except Exception as e:
-        print(f"Error reading CSV: {e}")
-        sys.exit(1)
-        
-    initial_rows = len(df)
-    print(f"Loaded {initial_rows} rows.")
     
-    # Step 2: Check for problematic rows with encoding issues
-    print("\nChecking for encoding issues...")
+    print(f"\nLoading {input_path}...")
+    df = pd.read_csv(input_path, encoding='utf-8', encoding_errors='replace', low_memory=False)
+    
+    tracker.set_initial(len(df))
+    print(f"初期行数: {len(df):,}")
+    
+    # 2. エンコーディング問題チェック
     mask = df.astype(str).apply(lambda x: x.str.contains('\ufffd', na=False)).any(axis=1)
-    problematic_rows = df[mask]
+    problematic = df[mask]
     
-    print(f"Problematic rows with encoding issues: {len(problematic_rows)}")
-    if len(problematic_rows) > 0:
-        print(f"Percentage: {len(problematic_rows)/len(df)*100:.2f}%")
+    if len(problematic) > 0:
+        pct = len(problematic) / len(df) * 100
+        if pct < 1:
+            tracker.record_removal(
+                "エンコーディング問題（< 1%）",
+                len(problematic),
+                [f"Row {i}" for i in problematic.index[:5]]
+            )
+            df = df[~mask]
+        else:
+            tracker.add_warning(f"エンコーディング問題: {len(problematic)}行 ({pct:.2f}%)")
     
-    # Step 3: Remove if minor issue
-    if len(problematic_rows) / len(df) < 0.01:  # Less than 1%
-        print("✓ Removing problematic rows (< 1% of data)")
-        df = df[~mask]
-        print(f"Rows after removing encoding issues: {len(df)}")
-    elif len(problematic_rows) > 0:
-        print("⚠ WARNING: Many rows have encoding issues, but continuing...")
-    else:
-        print("✓ No encoding issues detected.")
-    
-    # 2. Rename Columns
-    # Expected: Destination, Sending Country, Year, Location, Embassy, Focus, EmbassyFocus, LOR
-    # Map to: year, origin, destination, embassy_level, focus
-    
-    # Check current columns
-    print(f"\nColumns: {list(df.columns)}")
-    
-    # Flexible mapping to handle potential variations
+    # 3. 列リネーム
     col_map = {
-        'Year': 'year',
-        'Sending Country': 'origin',
-        'Destination': 'destination',
-        'Embassy': 'embassy_level',
-        'Focus': 'focus' 
+        'Year': 'year', 'Sending Country': 'origin',
+        'Destination': 'destination', 'Embassy': 'embassy_level',
+        'Focus': 'focus'
     }
-    
-    # Verify columns exist
-    missing_cols = [c for c in col_map.keys() if c not in df.columns]
-    if missing_cols:
-        print(f"WARNING: Missing expected columns: {missing_cols}")
-        # Try to guess? Or fail? Let's try to proceed if critical ones exist
-        if 'year' not in df.columns and 'Year' not in df.columns:
-            print("Critical column 'Year' missing.")
-            sys.exit(1)
-            
     df = df.rename(columns=col_map)
-    
-    # Keep only needed columns
-    needed_cols = ['year', 'origin', 'destination', 'embassy_level', 'focus']
-    # If some are missing (e.g. 'focus'), fill with default or drop?
-    # User said "Expected columns: ... Focus ...", so assume it's there.
-    
-    # Handle case where columns might not have been renamed if keys didn't match exactly
-    # (e.g. extra spaces). Let's clean column names first.
     df.columns = [c.strip() for c in df.columns]
-    # Re-apply rename with stripped keys if needed, but the map above used clean keys 
-    # assuming the CSV has clean keys. 
     
-    current_cols = df.columns.tolist()
-    available_cols = [c for c in needed_cols if c in current_cols]
+    needed_cols = ['year', 'origin', 'destination', 'embassy_level', 'focus']
+    available_cols = [c for c in needed_cols if c in df.columns]
     df = df[available_cols].copy()
     
-    # 3. Filter Time Range
-    print(f"\nFiltering years {START_YEAR}-{END_YEAR}...")
+    # 4. 時間フィルタ
     df['year'] = pd.to_numeric(df['year'], errors='coerce')
-    df = df.dropna(subset=['year']) 
+    pre_time = len(df)
+    df = df.dropna(subset=['year'])
     df = df[(df['year'] >= START_YEAR) & (df['year'] <= END_YEAR)]
-    print(f"Rows after year filter: {len(df)}")
+    tracker.record_removal(
+        "時間範囲外（2000-2020年外）",
+        pre_time - len(df)
+    )
     
-    # 4. Country Conversion
-    print("\nConverting country names to ISO codes...")
+    # 5. ISO変換
+    unconvertible = []
     
-    # Track unconvertible
-    unconvertible = set()
-    
-    def convert_with_track(name):
+    def track_conversion(name):
         code = get_iso_code(name)
         if not code:
-            unconvertible.add(name)
+            unconvertible.append(name)
         return code
-        
-    df['origin_iso'] = df['origin'].apply(convert_with_track)
-    df['destination_iso'] = df['destination'].apply(convert_with_track)
     
-    # Report unconvertible
-    if unconvertible:
-        print(f"WARNING: {len(unconvertible)} country names could not be converted.")
-        print(f"Sample of unconvertible: {list(unconvertible)[:10]}")
+    df['origin_iso'] = df['origin'].apply(track_conversion)
+    df['destination_iso'] = df['destination'].apply(track_conversion)
     
-    # Drop rows where conversion failed
-    rows_pre_iso_drop = len(df)
+    pre_iso = len(df)
     df = df.dropna(subset=['origin_iso', 'destination_iso'])
-    print(f"Dropped {rows_pre_iso_drop - len(df)} rows due to invalid country codes.")
     
-    # Replace columns
+    if unconvertible:
+        unique_failed = list(set(unconvertible))
+        tracker.record_removal(
+            "ISO変換失敗",
+            pre_iso - len(df),
+            unique_failed[:20]
+        )
+        if len(unique_failed) > 10:
+            tracker.add_warning(f"多数の国名変換失敗: {len(unique_failed)}カ国")
+    
     df['origin'] = df['origin_iso']
     df['destination'] = df['destination_iso']
     df = df.drop(columns=['origin_iso', 'destination_iso'])
     
-    # 5. Cleaning
-    print("\nCleaning data...")
-    rows_step5_start = len(df)
-    
-    # Remove self-loops
+    # 6. 自己ループ
+    pre_loops = len(df)
     df = df[df['origin'] != df['destination']]
-    loops_removed = rows_step5_start - len(df)
-    print(f"Removed {loops_removed} self-loops.")
+    tracker.record_removal(
+        "自己ループ（origin == destination）",
+        pre_loops - len(df)
+    )
     
-    # Remove weak relations (embassy_level < 4)
-    rows_pre_level = len(df)
+    # 7. 弱い関係
     df['embassy_level'] = pd.to_numeric(df['embassy_level'], errors='coerce')
     df = df.dropna(subset=['embassy_level'])
+    pre_weak = len(df)
     df = df[df['embassy_level'] >= 4]
-    weak_removed = rows_pre_level - len(df)
-    print(f"Removed {weak_removed} weak relations (level < 4).")
+    tracker.record_removal(
+        "弱い外交関係（embassy_level < 4）",
+        pre_weak - len(df)
+    )
     
-    # Remove rows with any remaining missing values
-    rows_pre_na = len(df)
+    # 8. 欠損値
+    pre_na = len(df)
     df = df.dropna()
-    na_removed = rows_pre_na - len(df)
-    print(f"Removed {na_removed} rows with missing values.")
+    tracker.record_removal("欠損値", pre_na - len(df))
     
-    # 6. Deduplication
-    print("\nHandling duplicates...")
-    # Keep row with max embassy_level for same (year, origin, destination)
-    # Sort by embassy_level desc, then drop duplicates keeping first
-    rows_pre_dedup = len(df)
+    # 9. 重複
+    pre_dup = len(df)
     df = df.sort_values('embassy_level', ascending=False)
     df = df.drop_duplicates(subset=['year', 'origin', 'destination'], keep='first')
-    duplicates_removed = rows_pre_dedup - len(df)
-    print(f"Removed {duplicates_removed} duplicate entries.")
+    tracker.record_removal("重複エントリ", pre_dup - len(df))
     
-    # 7. Final Formatting
+    # 10. 最終処理
     df = df.sort_values(['year', 'origin', 'destination'])
-    # Ensure types
     df['year'] = df['year'].astype(int)
     df['embassy_level'] = df['embassy_level'].astype(int)
     if 'focus' in df.columns:
         df['focus'] = df['focus'].astype(int)
     
-    # 8. Statistics
-    print("\n" + "="*30)
-    print("FINAL STATISTICS")
-    print("="*30)
-    print(f"Original Rows: {initial_rows}")
-    print(f"Final Rows: {len(df)}")
-    print(f"Percent retained: {len(df)/initial_rows*100:.2f}%")
+    final_count = len(df)
     
-    print("\n--- Edges per Year ---")
-    year_stats = df.groupby('year').size().describe()
-    print(year_stats[['mean', 'min', 'max']])
+    # レポート生成
+    report = tracker.generate_report(final_count)
+    print("\n" + report)
     
-    print("\n--- Top 10 Countries by Missions (Origin) ---")
-    top_origins = df.groupby('origin').size().sort_values(ascending=False).head(10)
-    print(top_origins)
+    # レポート保存
+    with open(QUALITY_REPORT_FILE, 'w', encoding='utf-8') as f:
+        f.write(report)
+    print(f"\n品質レポート保存: {QUALITY_REPORT_FILE}")
     
-    # Save
-    print(f"\nSaving to {OUTPUT_FILE}...")
+    # データ保存
     df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
-    print("Done.")
+    print(f"データ保存: {OUTPUT_FILE}")
+    print(f"\n✓ 完了")
 
 if __name__ == "__main__":
     main()
