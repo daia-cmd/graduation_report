@@ -36,16 +36,16 @@
   影響: 729 (1.08%)
   正当性: ✓
   詳細:
-    - LCR
-    - WNH
-    - PHO
-    - AOS
-    - PLJ
-    - KBC
-    - GCW
-    - INB
-    - EDA
-    - KPB
+    - TNK
+    - KHQ
+    - ATT
+    - SRK
+    - LGQ
+    - UGB
+    - CXF
+    - SVC
+    - BLD
+    - PUM
     ... and 10 more
 
 【\N（データなし）】

@@ -8,6 +8,7 @@ from collections import defaultdict
 DIPLOMATIC_FILE = 'diplomatic_network.csv'
 AVIATION_FILE = 'aviation_network_raw.csv'
 MIGRATION_FILE = 'data/processed/migration_network.csv'
+TRADE_FILE = 'data/processed/trade_network.csv'
 OUTPUT_FILE = 'multilayer_network.csv'
 QUALITY_REPORT_FILE = 'multilayer_integration_quality_report.txt'
 
@@ -86,13 +87,18 @@ class IntegrationQualityTracker:
             migr = df_year[df_year['migrant_stock'].notna()]
             report.append(f"  移民: {len(migr):,}行")
             
+            # 貿易
+            trade = df_year[df_year['trade_value'].notna()]
+            report.append(f"  貿易: {len(trade):,}行")
+            
             # 全レイヤー
             all_layers = df_year[
                 df_year['diplomatic_relation'].notna() &
                 df_year['aviation_routes'].notna() &
-                df_year['migrant_stock'].notna()
+                df_year['migrant_stock'].notna() &
+                df_year['trade_value'].notna()
             ]
-            report.append(f"  3レイヤー全て: {len(all_layers):,}行 ({len(all_layers)/len(df_year)*100:.1f}%)")
+            report.append(f"  4レイヤー全て: {len(all_layers):,}行 ({len(all_layers)/len(df_year)*100:.1f}%)")
         
         # データ品質評価
         report.append("\n" + "-"*70)
@@ -123,8 +129,8 @@ class IntegrationQualityTracker:
             lines.append("✗ データ量が少ない（< 50,000行）")
         
         # チェック2: 欠損値率
-        total_cells = len(df) * 3  # 3つの値列
-        missing = df[['diplomatic_relation', 'aviation_routes', 'migrant_stock']].isna().sum().sum()
+        total_cells = len(df) * 4  # 4つの値列
+        missing = df[['diplomatic_relation', 'aviation_routes', 'migrant_stock', 'trade_value']].isna().sum().sum()
         missing_rate = missing / total_cells * 100
         
         if missing_rate < 70:
@@ -134,20 +140,21 @@ class IntegrationQualityTracker:
         else:
             lines.append(f"⚠ 欠損値率が高い（{missing_rate:.1f}%）- これは正常（レイヤーごとにデータが異なる）")
         
-        # チェック3: 3レイヤー全てのカバレッジ
-        all_three = df[
+        # チェック3: 4レイヤー全てのカバレッジ
+        all_four = df[
             df['diplomatic_relation'].notna() &
             df['aviation_routes'].notna() &
-            df['migrant_stock'].notna()
+            df['migrant_stock'].notna() &
+            df['trade_value'].notna()
         ]
-        coverage = len(all_three) / len(df) * 100
+        coverage = len(all_four) / len(df) * 100
         
         if coverage > 10:
-            lines.append(f"✓ 3レイヤー全てのカバレッジ: {coverage:.1f}%")
+            lines.append(f"✓ 4レイヤー全てのカバレッジ: {coverage:.1f}%")
         elif coverage > 5:
-            lines.append(f"⚠ 3レイヤー全てのカバレッジ: {coverage:.1f}%")
+            lines.append(f"⚠ 4レイヤー全てのカバレッジ: {coverage:.1f}%")
         else:
-            lines.append(f"⚠ 3レイヤー全てのカバレッジ: {coverage:.1f}% - 各レイヤーの国カバレッジが異なる")
+            lines.append(f"⚠ 4レイヤー全てのカバレッジ: {coverage:.1f}% - 各レイヤーの国カバレッジが異なる")
         
         return "\n".join(lines)
 
@@ -225,8 +232,14 @@ def main():
         ['year', 'origin', 'destination', 'migrant_stock']
     )
     
+    df_trade = load_and_validate(
+        TRADE_FILE,
+        "Trade Network",
+        ['year', 'origin', 'destination', 'trade_value']
+    )
+    
     # エラーチェック
-    if df_diplomatic is None or df_aviation is None or df_migration is None:
+    if df_diplomatic is None or df_aviation is None or df_migration is None or df_trade is None:
         print("\nERROR: Failed to load one or more datasets")
         sys.exit(1)
     
@@ -249,6 +262,12 @@ def main():
         '年範囲': f"{df_migration['year'].min()}-{df_migration['year'].max()}"
     })
     
+    tracker.record_dataset_stats('貿易', {
+        '行数': len(df_trade),
+        '国数': len(set(df_trade['origin']) | set(df_trade['destination'])),
+        '年範囲': f"{df_trade['year'].min()}-{df_trade['year'].max()}"
+    })
+    
     # 2. 航空路データを複製
     print("\n[Step 2] Replicating aviation data to multiple years...")
     df_aviation_multi = replicate_aviation_data(df_aviation, TARGET_YEARS)
@@ -259,10 +278,11 @@ def main():
     countries_diplo = set(df_diplomatic['origin']) | set(df_diplomatic['destination'])
     countries_avia = set(df_aviation['origin']) | set(df_aviation['destination'])
     countries_migr = set(df_migration['origin']) | set(df_migration['destination'])
+    countries_trade = set(df_trade['origin']) | set(df_trade['destination'])
     
-    common_all = countries_diplo & countries_avia & countries_migr
+    common_all = countries_diplo & countries_avia & countries_migr & countries_trade
     common_diplo_migr = countries_diplo & countries_migr
-    all_countries = countries_diplo | countries_avia | countries_migr
+    all_countries = countries_diplo | countries_avia | countries_migr | countries_trade
     
     tracker.set_common_countries({
         '全データセット共通': common_all,
@@ -301,13 +321,24 @@ def main():
     # 4.3 移民データをマージ
     df_migration_merge = df_migration[['year', 'origin', 'destination', 'migrant_stock']].copy()
     
-    df_final = df_merged.merge(
+    df_merged = df_merged.merge(
         df_migration_merge,
         on=['year', 'origin', 'destination'],
         how='outer'
     )
     
-    print(f"  最終（3レイヤー統合）: {len(df_final):,}行")
+    print(f"  外交+航空路+移民: {len(df_merged):,}行")
+    
+    # 4.4 貿易データをマージ
+    df_trade_merge = df_trade[['year', 'origin', 'destination', 'trade_value']].copy()
+    
+    df_final = df_merged.merge(
+        df_trade_merge,
+        on=['year', 'origin', 'destination'],
+        how='outer'
+    )
+    
+    print(f"  最終（4レイヤー統合）: {len(df_final):,}行")
     
     # 5. データクリーニング
     print("\n[Step 5] Cleaning integrated data...")
@@ -327,7 +358,8 @@ def main():
     df_final = df_final[
         df_final['diplomatic_relation'].notna() |
         df_final['aviation_routes'].notna() |
-        df_final['migrant_stock'].notna()
+        df_final['migrant_stock'].notna() |
+        df_final['trade_value'].notna()
     ]
     print(f"  空行除去後: {len(df_final):,}行（除外: {pre_empty - len(df_final):,}）")
     
@@ -336,7 +368,7 @@ def main():
     
     # 列の順序
     df_final = df_final[['year', 'origin', 'destination', 
-                         'diplomatic_relation', 'aviation_routes', 'migrant_stock']]
+                         'diplomatic_relation', 'aviation_routes', 'migrant_stock', 'trade_value']]
     
     # ソート
     df_final = df_final.sort_values(['year', 'origin', 'destination'])
@@ -346,6 +378,7 @@ def main():
     df_final['diplomatic_relation'] = df_final['diplomatic_relation'].astype('Int64')  # nullable int
     df_final['aviation_routes'] = df_final['aviation_routes'].astype('Int64')
     df_final['migrant_stock'] = df_final['migrant_stock'].astype('Int64')
+    df_final['trade_value'] = df_final['trade_value'].astype('Float64')  # nullable float for trade
     
     # 7. 統計サマリー
     print("\n" + "="*70)
@@ -360,17 +393,19 @@ def main():
     print(f"外交関係あり: {df_final['diplomatic_relation'].notna().sum():,}行 ({df_final['diplomatic_relation'].notna().sum()/len(df_final)*100:.1f}%)")
     print(f"航空路あり: {df_final['aviation_routes'].notna().sum():,}行 ({df_final['aviation_routes'].notna().sum()/len(df_final)*100:.1f}%)")
     print(f"移民データあり: {df_final['migrant_stock'].notna().sum():,}行 ({df_final['migrant_stock'].notna().sum()/len(df_final)*100:.1f}%)")
+    print(f"貿易データあり: {df_final['trade_value'].notna().sum():,}行 ({df_final['trade_value'].notna().sum()/len(df_final)*100:.1f}%)")
     
-    all_three = df_final[
+    all_four = df_final[
         df_final['diplomatic_relation'].notna() &
         df_final['aviation_routes'].notna() &
-        df_final['migrant_stock'].notna()
+        df_final['migrant_stock'].notna() &
+        df_final['trade_value'].notna()
     ]
-    print(f"3レイヤー全て: {len(all_three):,}行 ({len(all_three)/len(df_final)*100:.1f}%)")
+    print(f"4レイヤー全て: {len(all_four):,}行 ({len(all_four)/len(df_final)*100:.1f}%)")
     
-    print("\n--- サンプルデータ（3レイヤー全て） ---")
-    if len(all_three) > 0:
-        print(all_three.head(10))
+    print("\n--- サンプルデータ（4レイヤー全て） ---")
+    if len(all_four) > 0:
+        print(all_four.head(10))
     else:
         print("  該当なし")
     

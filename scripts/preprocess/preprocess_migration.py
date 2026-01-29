@@ -10,7 +10,7 @@ warnings.simplefilter(action='ignore', category=UserWarning)
 # --- CONFIGURATION ---
 INPUT_FILE = r'data/raw/un_migrant_stock.xlsx'
 OUTPUT_FILE = r'data/processed/migration_network.csv'
-QUALITY_REPORT_FILE = 'migration_data_quality_report.txt'
+QUALITY_REPORT_FILE =  r'data/quality_reports/migration_data_quality_report.txt'
 SHEET_NAME = 'Table 1'
 HEADER_ROW = 10
 TARGET_YEARS = [2000, 2005, 2010, 2015, 2020]
@@ -359,6 +359,7 @@ def main():
     
     # データ保存
     os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    os.makedirs(os.path.dirname(QUALITY_REPORT_FILE), exist_ok=True)
     df_long.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
     print(f"データ保存: {OUTPUT_FILE}")
     print(f"\n✓ 完了")

@@ -111,11 +111,12 @@ OUTPUT_DIRS = {
 for path in OUTPUT_DIRS.values():
     path.mkdir(parents=True, exist_ok=True)
 
-layers = ['diplomatic_relation', 'aviation_routes', 'migrant_stock']
+layers = ['diplomatic_relation', 'aviation_routes', 'migrant_stock', 'trade_value']
 layer_names = {
     'diplomatic_relation': '外交',
     'aviation_routes': '航空',
-    'migrant_stock': '移民'
+    'migrant_stock': '移民',
+    'trade_value': '貿易'
 }
 
 years = sorted(df['year'].unique())

@@ -7,9 +7,9 @@ from collections import defaultdict
 # --- CONFIGURATION ---
 ROUTES_FILE = r'data/raw/routes.dat'
 AIRPORTS_FILE = r'data/raw/airports.dat'
-OUTPUT_FILE = 'aviation_network_raw.csv'
-QUALITY_REPORT_FILE = 'aviation_data_quality_report.txt'
-SNAPSHOT_YEAR = 2014
+OUTPUT_FILE = r'data/midstate/aviation_network_raw.csv'
+QUALITY_REPORT_FILE = r'data/quality_reports/aviation_data_quality_report.txt'
+TARGET_YEARS = [2000, 2005, 2010, 2015, 2020]
 
 # --- COMPLETE COUNTRY MAPPING DICTIONARY ---
 COUNTRY_MAPPING = {
@@ -388,8 +388,15 @@ def main():
     # 7. 集約
     print("\nAggregating routes...")
     agg_df = final_df.groupby(['origin', 'destination']).size().reset_index(name='route_count')
-    agg_df['year'] = SNAPSHOT_YEAR
-    agg_df = agg_df[['year', 'origin', 'destination', 'route_count']]
+    print(f"\nReplicating aviation network for years: {TARGET_YEARS}...")
+    result_frames = []
+    for year in TARGET_YEARS:
+        year_df = agg_df.copy()
+        year_df['year'] = year
+        result_frames.append(year_df)
+
+    final_output = pd.concat(result_frames, ignore_index=True)
+    final_output = final_output[['year', 'origin', 'destination', 'route_count']]
     
     # 8. 統計
     print("\n" + "="*70)
@@ -407,12 +414,14 @@ def main():
     print("\n" + report)
     
     # レポート保存
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    os.makedirs(os.path.dirname(QUALITY_REPORT_FILE), exist_ok=True)
     with open(QUALITY_REPORT_FILE, 'w', encoding='utf-8') as f:
         f.write(report)
     print(f"\n品質レポート保存: {QUALITY_REPORT_FILE}")
     
     # データ保存
-    agg_df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
+    final_output.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
     print(f"データ保存: {OUTPUT_FILE}")
     print(f"\n✓ 完了")
 

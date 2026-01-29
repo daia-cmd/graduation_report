@@ -1,0 +1,174 @@
+======================================================================
+ 統合版：マルチレイヤーネットワーク分析 + Top-k Accuracy検証 
+======================================================================
+
+実行日時: 2026-01-29 09:03:50.871943
+
+======================================================================
+ 1. データ概要 
+======================================================================
+
+Migration:
+  総行数: 38,530
+  年範囲: [2000, 2005, 2010, 2015, 2020]
+
+Diplomatic:
+  総行数: 43,650
+  年範囲: [2000, 2005, 2010, 2015, 2020]
+
+Aviation:
+  総行数: 21,505
+  年範囲: [2000, 2005, 2010, 2015, 2020]
+
+Trade:
+  総行数: 144,463
+  年範囲: [2000, 2005, 2010, 2015, 2020]
+
+======================================================================
+ 2. Top-k Accuracy検証結果 
+======================================================================
+
+設定:
+  訓練データ: [2000, 2005, 2010, 2015]
+  テストデータ: 2020
+  Top-K: 20
+  重み付け: 均等重み (1/N)
+
+正解データ（2020年移住流入Top-20）:
+   1. USA: 43,028,883
+   2. SAU: 12,579,763
+   3. DEU: 11,152,330
+   4. CAN: 8,076,502
+   5. FRA: 7,801,019
+   6. GBR: 7,516,465
+   7. AUS: 7,333,870
+   8. RUS: 7,182,351
+   9. ARE: 6,965,576
+  10. ESP: 6,796,660
+  11. TUR: 6,434,722
+  12. ITA: 6,169,388
+  13. JOR: 4,756,945
+  14. UKR: 4,571,036
+  15. IND: 4,509,947
+  16. MYS: 3,480,596
+  17. PAK: 3,201,265
+  18. JPN: 3,152,502
+  19. HKG: 2,929,168
+  20. KWT: 2,909,626
+
+結果サマリー:
+
+centrality_type  betweenness  degree
+combination                         
+全レイヤー                   0.15     0.6
+移住+外交                   0.10     0.9
+移住+外交+航空                0.15     0.9
+移住+外交+貿易                0.05     0.6
+移住+航空                   0.30     0.9
+移住+航空+貿易                0.15     0.6
+移住+貿易                   0.00     0.6
+移住のみ                    0.10     0.9
+
+======================================================================
+ 3. 詳細結果 
+======================================================================
+
+【移住のみ - Degree】
+  Accuracy: 0.900 (18/20)
+  一致国: ARE, AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JOR, JPN, MYS, PAK, RUS, SAU, UKR, USA
+
+【移住のみ - Betweenness】
+  Accuracy: 0.100 (2/20)
+  一致国: AUS, IND
+
+【移住+外交 - Degree】
+  Accuracy: 0.900 (18/20)
+  一致国: ARE, AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JOR, JPN, MYS, PAK, RUS, SAU, UKR, USA
+
+【移住+外交 - Betweenness】
+  Accuracy: 0.100 (2/20)
+  一致国: KWT, TUR
+
+【移住+航空 - Degree】
+  Accuracy: 0.900 (18/20)
+  一致国: ARE, AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JOR, JPN, MYS, PAK, RUS, SAU, UKR, USA
+
+【移住+航空 - Betweenness】
+  Accuracy: 0.300 (6/20)
+  一致国: ARE, CAN, FRA, HKG, TUR, USA
+
+【移住+貿易 - Degree】
+  Accuracy: 0.600 (12/20)
+  一致国: AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JPN, RUS, USA
+
+【移住+貿易 - Betweenness】
+  Accuracy: 0.000 (0/20)
+  一致国: 
+
+【移住+外交+航空 - Degree】
+  Accuracy: 0.900 (18/20)
+  一致国: ARE, AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JOR, JPN, MYS, PAK, RUS, SAU, UKR, USA
+
+【移住+外交+航空 - Betweenness】
+  Accuracy: 0.150 (3/20)
+  一致国: ARE, HKG, TUR
+
+【移住+外交+貿易 - Degree】
+  Accuracy: 0.600 (12/20)
+  一致国: AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JPN, RUS, USA
+
+【移住+外交+貿易 - Betweenness】
+  Accuracy: 0.050 (1/20)
+  一致国: ESP
+
+【移住+航空+貿易 - Degree】
+  Accuracy: 0.600 (12/20)
+  一致国: AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JPN, RUS, USA
+
+【移住+航空+貿易 - Betweenness】
+  Accuracy: 0.150 (3/20)
+  一致国: CAN, FRA, USA
+
+【全レイヤー - Degree】
+  Accuracy: 0.600 (12/20)
+  一致国: AUS, CAN, DEU, ESP, FRA, GBR, HKG, IND, ITA, JPN, RUS, USA
+
+【全レイヤー - Betweenness】
+  Accuracy: 0.150 (3/20)
+  一致国: CAN, FRA, USA
+
+======================================================================
+ 4. 仮説検証 
+======================================================================
+
+最高精度:
+  組み合わせ: 移住のみ
+  中心性: degree
+  精度: 0.900
+
+単層 vs 多層:
+  単層平均: 0.500
+  多層平均: 0.429
+  差分: -0.071
+  → 仮説非支持: 単層ネットワークの方が精度が高い ✗
+
+======================================================================
+ 5. 出力ファイル一覧 
+======================================================================
+
+【既存の可視化】
+  図7:  outputs/figures/fig7_top10_by_layer.png
+  図8:  outputs/figures/fig8_multilayer_top20.png
+  図9:  outputs/figures/fig9_centrality_time_series.png
+  図10: outputs/figures/fig10_centrality_metrics_comparison.png
+  図11: outputs/figures/fig11_layer_centrality_correlation.png
+  図12: outputs/figures/fig12_rank_changes_2000_vs_2020.png
+
+【Top-k Accuracy検証】
+  図13: outputs/figures/fig13_topk_accuracy_comparison.png
+  図14: outputs/figures/fig14_accuracy_vs_layers.png
+  図15: outputs/figures/fig15_prediction_heatmap.png
+
+【テーブル】
+  outputs/tables/topk_accuracy_results.csv
+  outputs/tables/topk_accuracy_summary.csv

@@ -22,16 +22,16 @@
   除外/変換: 6,160 (21.98%)
   正当性: ✓
   詳細:
-    - Niue
+    - Others
+    - Gibraltar
+    - Bonaire, Sint Eustatius and Saba
     - Greenland
-    - Mayotte
-    - United States Virgin Islands
-    - Melanesia
-    - Western Sahara
+    - Martinique
+    - Puerto Rico
+    - French Guiana
+    - Saint Helena
+    - Guadeloupe
     - Anguilla
-    - Falkland Islands (Malvinas)
-    - British Virgin Islands
-    - New Caledonia
     ... and 10 more
 
 【無効/ゼロの移民数】

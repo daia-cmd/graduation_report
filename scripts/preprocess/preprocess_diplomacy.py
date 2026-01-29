@@ -6,10 +6,9 @@ from collections import defaultdict
 
 # --- CONFIGURATION ---
 INPUT_FILE = r'data/raw/diplometrics_ddr.csv'
-OUTPUT_FILE = 'diplomatic_network.csv'
-QUALITY_REPORT_FILE = 'diplomatic_data_quality_report.txt'
-START_YEAR = 2000
-END_YEAR = 2020
+OUTPUT_FILE = r'data/processed/diplomatic_network.csv'
+QUALITY_REPORT_FILE = r'data/quality_reports/diplomatic_data_quality_report.txt'
+TARGET_YEARS = [2000, 2005, 2010, 2015, 2020]
 
 # --- COUNTRY MAPPING DICTIONARY ---
 # (完全版 - 省略せず全部含める)
@@ -293,9 +292,10 @@ def main():
     df['year'] = pd.to_numeric(df['year'], errors='coerce')
     pre_time = len(df)
     df = df.dropna(subset=['year'])
-    df = df[(df['year'] >= START_YEAR) & (df['year'] <= END_YEAR)]
+    df['year'] = df['year'].astype(int)
+    df = df[df['year'].isin(TARGET_YEARS)]
     tracker.record_removal(
-        "時間範囲外（2000-2020年外）",
+        "時間範囲外（2000,2005,2010,2015,2020以外）",
         pre_time - len(df)
     )
     
@@ -376,6 +376,8 @@ def main():
     print(f"\n品質レポート保存: {QUALITY_REPORT_FILE}")
     
     # データ保存
+    os.makedirs(os.path.dirname(OUTPUT_FILE), exist_ok=True)
+    os.makedirs(os.path.dirname(QUALITY_REPORT_FILE), exist_ok=True)
     df.to_csv(OUTPUT_FILE, index=False, encoding='utf-8')
     print(f"データ保存: {OUTPUT_FILE}")
     print(f"\n✓ 完了")
